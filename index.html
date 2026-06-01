@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>1-Bit Bonsai — Image Quantization Lab</title>
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface2: #1a2234;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --accent: #10b981;
+  --accent2: #059669;
+  --glow: rgba(16,185,129,0.3);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.header {
+  padding: 24px 32px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.header .badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(16,185,129,0.12);
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.header .sub {
+  font-size: 13px;
+  color: var(--text2);
+  flex: 1;
+}
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 32px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  flex-wrap: wrap;
+  background: var(--surface);
+}
+.controls label {
+  font-size: 12px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.controls .slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.controls input[type=range] {
+  width: 200px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.controls .val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 60px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.controls button {
+  padding: 6px 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  background: var(--surface2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.controls button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.controls button.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.main-canvas-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.canvas-panel {
+  position: relative;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.canvas-panel .label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 10px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  z-index: 2;
+  background: rgba(10,14,23,0.7);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.canvas-panel canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+.quantization-display {
+  padding: 16px 24px;
+  background: var(--surface);
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.quant-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.quant-row .bit-label {
+  width: 70px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.quant-row .pixel-grid {
+  display: grid;
+  gap: 2px;
+}
+.quant-row .pixel-grid canvas {
+  display: block;
+}
+.quant-row .bit-repr {
+  font-family: 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.06em;
+  flex: 1;
+  min-width: 0;
+}
+.quant-row .size-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  min-width: 4px;
+  transition: width 0.3s;
+}
+.stats-bar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 32px;
+  background: var(--surface);
+  border-top: 1px solid rgba(255,255,255,0.04);
+  flex-wrap: wrap;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-item .stat-label {
+  font-size: 10px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.stat-item .stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.stat-item .stat-value.highlight {
+  color: var(--accent);
+}
+.denoise-canvas-wrap {
+  padding: 0 24px 16px;
+  display: flex;
+  justify-content: center;
+}
+.denoise-canvas-wrap canvas {
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.info-panel {
+  padding: 16px 32px;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.info-panel a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.info-panel a:hover {
+  text-decoration: underline;
+}
+.info-panel .ref {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.info-panel .ref a {
+  font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>1-Bit Bonsai — Image Quantization Lab</h1>
+  <span class="badge">HN #2</span>
+  <span class="sub">Visualizing how 1-bit quantization compresses 4B parameter image models down to ~0.93 GB</span>
+</div>
+
+<div class="controls">
+  <label>Quantization Bit Depth</label>
+  <div class="slider-wrap">
+    <input type="range" id="bitSlider" min="1" max="8" step="1" value="8">
+    <span class="val" id="bitVal">8-bit</span>
+  </div>
+  <div class="slider-wrap">
+    <label>Denoising Steps</label>
+    <input type="range" id="stepSlider" min="0" max="100" step="1" value="0">
+    <span class="val" id="stepVal">0</span>
+  </div>
+  <button id="btnAnimate">▶ Animate</button>
+  <button id="btnReset">↺ Reset</button>
+  <div style="flex:1"></div>
+  <div class="val" id="modelSize">4,096 MB</div>
+  <div class="val" id="compressedSize">930 MB</div>
+</div>
+
+<div class="main-canvas-wrap">
+  <div class="canvas-panel">
+    <span class="label">Full Precision</span>
+    <canvas id="canvasFull" width="256" height="256"></canvas>
+  </div>
+  <div class="canvas-panel">
+    <span class="label" id="quantLabel">8-bit Quantized</span>
+    <canvas id="canvasQuant" width="256" height="256"></canvas>
+  </div>
+</div>
+
+<div class="quantization-display">
+  <div class="quant-row" style="margin-bottom:12px;">
+    <span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Channel</span>
+    <span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;">Bits</span>
+    <span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;width:200px;">Representation</span>
+    <span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;">Ratio</span>
+  </div>
+  <div class="quant-row">
+    <span class="bit-label">R</span>
+    <span style="flex:0 0 40px;text-align:center;" id="qr_bits">8</span>
+    <span class="bit-repr" id="qr_bits_str">01111111 01111111 01111111 01111111 01111111 01111111 01111111 01111111</span>
+    <div class="size-bar" id="qr_bar" style="width:100%;background:#ef4444;"></div>
+    <span style="font-size:12px;color:var(--text2);width:50px;text-align:right;" id="qr_pct">100%</span>
+  </div>
+  <div class="quant-row">
+    <span class="bit-label">G</span>
+    <span style="flex:0 0 40px;text-align:center;" id="qg_bits">8</span>
+    <span class="bit-repr" id="qg_bits_str">01111111 01111111 01111111 01111111 01111111 01111111 01111111 01111111</span>
+    <div class="size-bar" id="qg_bar" style="width:100%;background:#22c55e;"></div>
+    <span style="font-size:12px;color:var(--text2);width:50px;text-align:right;" id="qg_pct">100%</span>
+  </div>
+  <div class="quant-row">
+    <span class="bit-label">B</span>
+    <span style="flex:0 0 40px;text-align:center;" id="qb_bits">8</span>
+    <span class="bit-repr" id="qb_bits_str">01111111 01111111 01111111 01111111 01111111 01111111 01111111 01111111</span>
+    <div class="size-bar" id="qb_bar" style="width:100%;background:#3b82f6;"></div>
+    <span style="font-size:12px;color:var(--text2);width:50px;text-align:right;" id="qb_pct">100%</span>
+  </div>
+  <div class="quant-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;margin-top:4px;">
+    <span class="bit-label">Alpha</span>
+    <span style="flex:0 0 40px;text-align:center;" id="qa_bits">8</span>
+    <span class="bit-repr" id="qa_bits_str">01111111 01111111 01111111 01111111 01111111 01111111 01111111 01111111</span>
+    <div class="size-bar" id="qa_bar" style="width:100%;background:#8b5cf6;"></div>
+    <span style="font-size:12px;color:var(--text2);width:50px;text-align:right;" id="qa_pct">100%</span>
+  </div>
+</div>
+
+<div class="denoise-canvas-wrap">
+  <div class="canvas-panel" style="border-radius:8px;">
+    <span class="label">Denoising Diffusion Simulation</span>
+    <canvas id="canvasDenoise" width="512" height="256"></canvas>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-item">
+    <span class="stat-label">PSNR (dB)</span>
+    <span class="stat-value" id="statPSNR">∞</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">SSIM</span>
+    <span class="stat-value" id="statSSIM">1.000</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">Compression Ratio</span>
+    <span class="stat-value" id="statRatio">1x</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">Model Weights</span>
+    <span class="stat-value highlight" id="statWeights">4,096 MB</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">Quantized Model</span>
+    <span class="stat-value highlight" id="statQuantModel">930 MB</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">Quality Score</span>
+    <span class="stat-value" id="statQuality">100%</span>
+  </div>
+</div>
+
+<div class="info-panel">
+  <div class="ref">
+    <span>Based on: <a href="https://prismml.com" target="_blank">PrismML 1-Bit Bonsai</a> — 4B image generation model running locally at ~0.93GB with 88% quality</span>
+    <span style="color:var(--text2);">|</span>
+    <span><a href="https://news.ycombinator.com/item?id=40836358" target="_blank">HN Discussion</a></span>
+    <span style="color:var(--text2);">|</span>
+    <span>279 points, 95 comments</span>
+  </div>
+</div>
+
+<script>
+// Seeded PRNG (mulberry32)
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.im(t, t) | 0;
+    return t ^ t >>> 1;
+  };
+}
+const rng = mulberry32(75);
+
+// Generate a deterministic "landscape" image
+const W = 256, H = 256;
+const fullCanvas = document.getElementById('canvasFull');
+const quantCanvas = document.getElementById('canvasQuant');
+const denoiseCanvas = document.getElementById('canvasDenoise');
+const ctxFull = fullCanvas.getContext('2d');
+const ctxQuant = quantCanvas.getContext('2d');
+const ctxDenoise = denoiseCanvas.getContext('2d');
+
+// Full image data (float-like values 0-255)
+const fullImageData = ctxFull.createImageData(W, H);
+const fullPixels = fullImageData.data;
+
+// Procedural landscape generation
+function generateLandscape() {
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const nx = x / W * 4;
+      const ny = y / H * 4;
+      const t = rng() * 0.001;
+      // Sky gradient
+      const sky = Math.max(0, 1 - y / (H * 0.6));
+      // Mountains
+      const mx = Math.sin(nx * 2 + 0.5) * 0.5 + Math.sin(nx * 5 + 1) * 0.25 + Math.sin(ny * 0.3) * 0.5;
+      const mountain = Math.max(0, mx - 0.2);
+      const grass = Math.max(0, 1 - mountain * 2);
+      // Water reflection
+      const water = Math.max(0, y / H - 0.7) * 0.5;
+      
+      // Color: warm sunset
+      fullPixels[i] = Math.floor(30 + sky * 180 + mountain * 40);     // R
+      fullPixels[i + 1] = Math.floor(20 + sky * 120 + grass * 60);   // G
+      fullPixels[i + 2] = Math.floor(60 + sky * 80 + water * 100);   // B
+      fullPixels[i + 3] = 255; // Alpha
+    }
+  }
+}
+generateLandscape();
+
+// Draw a pixel grid visualization
+function drawPixelGrid(canvas, ctx, imageData, bits) {
+  const d = imageData.data;
+  const blockSize = Math.max(1, Math.floor(Math.sqrt(imageData.width * imageData.height / 32)));
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0a0e17';
+  ctx.fillRect(0, 0, W, H);
+  ctx.imageSmoothingEnabled = false;
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// Quantization function
+function quantizePixels(src, bits) {
+  const dst = new Uint8ClampedArray(src.length);
+  const levels = Math.pow(2, bits);
+  const step = 255 / (levels - 1);
+  for (let i = 0; i < src.length; i += 4) {
+    dst[i] = Math.round(Math.min(255, Math.max(0, Math.floor(src[i] / step + 0.5) * step)) / step);
+    dst[i + 1] = Math.round(Math.min(255, Math.max(0, Math.floor(src[i + 1] / step + 0.5) * step)) / step);
+    dst[i + 2] = Math.round(Math.min(255, Math.max(0, Math.floor(src[i + 2] / step + 0.5) * step)) / step);
+    dst[i + 3] = src[i + 3];
+  }
+  return dst;
+}
+
+// Compute metrics
+function computeMetrics(src, dst, bits) {
+  let mse = 0, ssimNum = 0, ssimDen = 0, ssimC = 0;
+  const C1 = (0.01 * 255) ** 2;
+  const C2 = (0.03 * 255) ** 2;
+  let px = 0;
+  for (let i = 0; i < src.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const diff = src[i + c] - dst[i + c];
+      mse += diff * diff;
+      px++;
+      const m1 = src[i + c], m2 = dst[i + c];
+      ssimNum += 2 * m1 * m2 + C1;
+      ssimC += 2;
+    }
+  }
+  mse /= (px * 3);
+  const psnr = mse === 0 ? Infinity : 10 * Math.log10((255 * 255) / mse);
+  const ssim = (2 * mse * (255 * 255) + C1) / (mse * mse + C2);
+  const compression = (1 / (Math.pow(2, 8) / Math.pow(2, bits)));
+  return { psnr, ssim: Math.min(1, ssim), compression, mse };
+}
+
+// Update bit depth
+let currentBits = 8;
+let currentSteps = 0;
+let animating = false;
+
+function updateQuantization(bits) {
+  const levels = Math.pow(2, bits);
+  const step = 255 / (levels - 1);
+  const quantized = quantizePixels(fullPixels, bits);
+  ctxQuant.putImageData({ data: quantized, width: W, height: H }, 0, 0);
+  
+  const metrics = computeMetrics(fullPixels, quantized, bits);
+  
+  // Update labels
+  document.getElementById('quantLabel').textContent = `${bits}-bit Quantized`;
+  document.getElementById('bitVal').textContent = `${bits}-bit`;
+  document.getElementById('bitSlider').value = bits;
+  
+  // Update stats
+  if (bits === 8) {
+    document.getElementById('statPSNR').textContent = '∞';
+    document.getElementById('statSSIM').textContent = '1.000';
+    document.getElementById('statRatio').textContent = '1x';
+  } else {
+    document.getElementById('statPSNR').textContent = metrics.psnr.toFixed(1);
+    document.getElementById('statSSIM').textContent = metrics.ssim.toFixed(3);
+    document.getElementById('statRatio').textContent = `${(1 / metrics.compression).toFixed(1)}x`;
+  }
+  
+  // Update model sizes (4B params = 4096 MB at 32-bit float)
+  const fullSize = 4096;
+  const quantSize = Math.round(fullSize * (bits / 32));
+  document.getElementById('modelSize').textContent = `${fullSize.toLocaleString()} MB`;
+  document.getElementById('compressedSize').textContent = `${quantSize.toLocaleString()} MB`;
+  document.getElementById('statWeights').textContent = `${fullSize.toLocaleString()} MB`;
+  document.getElementById('statQuantModel').textContent = `${quantSize.toLocaleString()} MB`;
+  
+  // Quality score
+  const qualityScore = Math.round((bits / 8) * 100 * (bits >= 8 ? 1 : 0.88));
+  document.getElementById('statQuality').textContent = `${Math.min(100, qualityScore)}%`;
+  
+  // Update channel bars
+  const bitColors = {
+    'qr': { el: 'qr_bar', color: '#ef4444' },
+    'qg': { el: 'qg_bar', color: '#22c55e' },
+    'qb': { el: 'qb_bar', color: '#3b82f6' },
+    'qa': { el: 'qa_bar', color: '#8b5cf6' },
+  };
+  const channels = ['qr', 'qg', 'qb', 'qa'];
+  channels.forEach(ch => {
+    document.getElementById(bitColors[ch].el).style.width = `${(bits / 8) * 100}%`;
+    document.getElementById(bitColors[ch].el).style.background = bitColors[ch].color;
+    document.getElementById(`${ch}_bits`).textContent = bits;
+    const levels = Math.pow(2, bits);
+    const step = 255 / (levels - 1);
+    const sampleBits = bits;
+    let bitsStr = '';
+    for (let b = 0; b < Math.min(16, sampleBits * 2); b++) {
+      const byte = Math.floor(rng() * 256);
+      bitsStr += `${byte.toString(2).padStart(8, '0')} `;
+    }
+    if (sampleBits === 1) {
+      // Special 1-bit display
+      bitsStr = bits > 1 ? '00000001 00000001 ' + '...'.repeat(Math.floor(sampleBits / 8)) : '01';
+    }
+    document.getElementById(`${ch}_bits_str`).textContent = bitsStr.trim().substring(0, 60);
+    document.getElementById(`${ch}_pct`).textContent = `${Math.round((bits / 8) * 100)}%`;
+  });
+  
+  // Update denoising canvas
+  updateDenoiseCanvas(bits);
+}
+
+function updateDenoiseCanvas(bits) {
+  const dW = denoiseCanvas.width, dH = denoiseCanvas.height;
+  ctxDenoise.clearRect(0, 0, dW, dH);
+  
+  // Show a small quantized version with denoising effect
+  const quantized = quantizePixels(fullPixels, bits);
+  const qd = new ImageData(quantized, W, H);
+  
+  // Scale down and show on denoise canvas
+  ctxDenoise.drawImage(quantCanvas, 0, 0, dW, dH);
+  
+  // Add noise layers based on denoising steps
+  const remainingSteps = 100 - currentSteps;
+  const noiseAlpha = Math.max(0, (remainingSteps / 100) * 0.3);
+  
+  ctxDenoise.fillStyle = `rgba(255,255,255,${noiseAlpha})`;
+  for (let i = 0; i < remainingSteps * 2; i++) {
+    const x = rng() * dW;
+    const y = rng() * dH;
+    ctxDenoise.fillRect(x, y, 2, 2);
+  }
+  
+  // Draw a mini representation of the quantization process
+  const miniW = 128, miniH = 64;
+  const offsetX = (dW - miniW) / 2, offsetY = (dH - miniH) / 2 + 20;
+  
+  // Show "before" (noise) and "after" (denoised) side by side
+  ctxDenoise.fillStyle = '#111827';
+  ctxDenoise.fillRect(0, 0, dW, dH);
+  
+  // Draw the quantized image at reduced size
+  const miniCanvas = document.createElement('canvas');
+  miniCanvas.width = miniW;
+  miniCanvas.height = miniH;
+  const miniCtx = miniCanvas.getContext('2d');
+  miniCtx.putImageData(qd, 0, 0);
+  ctxDenoise.drawImage(miniCanvas, offsetX, offsetY);
+  
+  // Add grid overlay
+  ctxDenoise.strokeStyle = `rgba(16,185,129,${0.1 + (currentSteps / 100) * 0.3})`;
+  ctxDenoise.lineWidth = 0.5;
+  const gridSize = Math.max(2, Math.floor(8 - bits));
+  for (let gx = offsetX; gx < offsetX + miniW; gx += gridSize) {
+    ctxDenoise.beginPath();
+    ctxDenoise.moveTo(gx, offsetY);
+    ctxDenoise.lineTo(gx, offsetY + miniH);
+    ctxDenoise.stroke();
+  }
+  for (let gy = offsetY; gy < offsetY + miniH; gy += gridSize) {
+    ctxDenoise.beginPath();
+    ctxDenoise.moveTo(offsetX, gy);
+    ctxDenoise.lineTo(offsetX + miniW, gy);
+    ctxDenoise.stroke();
+  }
+  
+  // Step counter overlay
+  ctxDenoise.fillStyle = '#10b981';
+  ctxDenoise.font = '11px monospace';
+  ctxDenoise.fillText(`${currentSteps}/100 steps`, offsetX, offsetY - 5);
+  ctxDenoise.fillText(`Quantization: ${bits}-bit`, offsetX + 120, offsetY - 5);
+}
+
+// Animation
+let animInterval = null;
+document.getElementById('btnAnimate').addEventListener('click', () => {
+  animating = !animating;
+  document.getElementById('btnAnimate').textContent = animating ? '⏸ Pause' : '▶ Animate';
+  document.getElementById('btnAnimate').classList.toggle('active', animating);
+  
+  if (animating) {
+    animInterval = setInterval(() => {
+      currentSteps = Math.min(100, currentSteps + 1);
+      document.getElementById('stepSlider').value = currentSteps;
+      document.getElementById('stepVal').textContent = currentSteps;
+      updateDenoiseCanvas(currentBits);
+      if (currentSteps >= 100) {
+        currentSteps = 0;
+        // Cycle through bit depths
+        currentBits = currentBits <= 1 ? 8 : currentBits - 1;
+        updateQuantization(currentBits);
+      }
+    }, 100);
+  } else {
+    clearInterval(animInterval);
+  }
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  animating = false;
+  document.getElementById('btnAnimate').textContent = '▶ Animate';
+  document.getElementById('btnAnimate').classList.remove('active');
+  if (animInterval) clearInterval(animInterval);
+  currentSteps = 0;
+  currentBits = 8;
+  document.getElementById('stepSlider').value = 0;
+  document.getElementById('stepVal').textContent = '0';
+  updateQuantization(8);
+});
+
+document.getElementById('bitSlider').addEventListener('input', (e) => {
+  currentBits = parseInt(e.target.value);
+  updateQuantization(currentBits);
+});
+
+document.getElementById('stepSlider').addEventListener('input', (e) => {
+  currentSteps = parseInt(e.target.value);
+  document.getElementById('stepVal').textContent = currentSteps;
+  updateDenoiseCanvas(currentBits);
+});
+
+// Touch support
+let touchStartX = 0;
+quantCanvas.addEventListener('touchstart', (e) => {
+  touchStartX = e.touches[0].clientX;
+  e.preventDefault();
+}, { passive: false });
+quantCanvas.addEventListener('touchmove', (e) => {
+  const dx = e.touches[0].clientX - touchStartX;
+  if (Math.abs(dx) > 20) {
+    currentBits = Math.max(1, Math.min(8, currentBits - Math.sign(dx)));
+    updateQuantization(currentBits);
+    touchStartX = e.touches[0].clientX;
+  }
+  e.preventDefault();
+}, { passive: false });
+
+// Initial render
+updateQuantization(8);
+
+// Draw full precision image on first load
+ctxFull.putImageData(fullImageData, 0, 0);
+</script>
+</body>
+</html>
